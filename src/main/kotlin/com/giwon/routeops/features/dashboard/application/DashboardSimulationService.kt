@@ -13,6 +13,8 @@ import com.giwon.routeops.features.dashboard.domain.RebalancingRecommendation
 import com.giwon.routeops.features.dashboard.domain.ForecastTrend
 import com.giwon.routeops.features.dashboard.domain.ScenarioStatus
 import com.giwon.routeops.features.dashboard.domain.OperationsReport
+import com.giwon.routeops.features.dashboard.domain.AiBriefing
+import com.giwon.routeops.features.dashboard.domain.WhatIfScenario
 import com.giwon.routeops.features.dashboard.domain.VehicleStatus
 import com.giwon.routeops.features.dashboard.domain.VehicleHistory
 import com.giwon.routeops.features.dashboard.domain.VehicleTimelinePoint
@@ -41,7 +43,6 @@ class DashboardSimulationService {
         val forecasts = buildForecasts(zones, peakFactor)
         val vehicleHistories = buildVehicleHistories(vehicles, scenario)
         val zoneTimelines = buildZoneTimelines(zones, scenario)
-        val report = buildOperationsReport(zones, recommendations, scenario)
         val summary = DashboardSummary(
             activeDemands = demands.count { it.status != DemandStatus.MISSED },
             dispatchSuccessRate = 88.0 - (peakFactor - 1) * 4.5,
@@ -49,6 +50,9 @@ class DashboardSimulationService {
             activeVehicles = vehicles.count { it.status != VehicleStatus.IDLE } + 4,
             shortageZones = zones.count { it.demandLevel >= 4 && it.availableVehicles <= 2 }
         )
+        val report = buildOperationsReport(zones, recommendations, scenario)
+        val aiBriefing = buildAiBriefing(zones, recommendations, forecasts, summary, scenario)
+        val whatIfScenarios = buildWhatIfScenarios(summary, zones, recommendations, scenario)
 
         return DashboardSnapshot(
             scenario = ScenarioStatus(
@@ -68,7 +72,9 @@ class DashboardSimulationService {
             forecasts = forecasts,
             vehicleHistories = vehicleHistories,
             zoneTimelines = zoneTimelines,
-            report = report
+            report = report,
+            aiBriefing = aiBriefing,
+            whatIfScenarios = whatIfScenarios
         )
     }
 
@@ -348,6 +354,68 @@ class DashboardSimulationService {
         )
     }
 
+    private fun buildAiBriefing(
+        zones: List<ZoneView>,
+        recommendations: List<RebalancingRecommendation>,
+        forecasts: List<DemandForecast>,
+        summary: DashboardSummary,
+        scenario: SimulationScenario
+    ): AiBriefing {
+        val topZone = zones.maxBy { it.demandLevel * 10 + it.averageWaitMinutes }
+        val topRecommendation = recommendations.maxBy { it.expectedWaitReductionMinutes + it.suggestedVehicleCount }
+        val risingForecast = forecasts
+            .filter { it.trend == ForecastTrend.UP }
+            .maxByOrNull { it.next30MinutesDemand }
+
+        return AiBriefing(
+            headline = "${topZone.name} 우선 대응이 필요한 상태입니다.",
+            overview = "${scenario.name} 영향으로 활성 호출 ${summary.activeDemands}건, 평균 대기 ${summary.averageWaitMinutes.toInt()}분 수준까지 올라왔습니다.",
+            recommendedAction = topRecommendation.title,
+            rationale = listOf(
+                "${topZone.name}의 수요 레벨은 ${topZone.demandLevel}, 가용 차량은 ${topZone.availableVehicles}대입니다.",
+                "${topRecommendation.suggestedVehicleCount}대 재배치 시 대기시간 ${topRecommendation.expectedWaitReductionMinutes.toFixed(1)}분 감소가 예상됩니다.",
+                risingForecast?.let { "${it.zoneName}는 30분 내 ${it.next30MinutesDemand}건 수준으로 추가 상승 가능성이 있습니다." }
+                    ?: "주요 환승 권역 수요는 당분간 상승 추세입니다."
+            ),
+            expectedImpact = "즉시 재배치 후 배차 성공률을 ${minOf(96.0, summary.dispatchSuccessRate + 2.8).toFixed(1)}% 수준까지 방어하는 것을 목표로 합니다.",
+            confidence = 84 + scenario.peakFactor * 3
+        )
+    }
+
+    private fun buildWhatIfScenarios(
+        summary: DashboardSummary,
+        zones: List<ZoneView>,
+        recommendations: List<RebalancingRecommendation>,
+        scenario: SimulationScenario
+    ): List<WhatIfScenario> {
+        val gangnam = zones.first { it.id == "gangnam" }
+        val samseong = zones.first { it.id == "samseong" }
+
+        return recommendations.mapIndexed { index, recommendation ->
+            val waitReduction = recommendation.expectedWaitReductionMinutes + index * 0.3
+            val dispatchGain = 1.8 + index * 0.7 + scenario.peakFactor * 0.4
+            val focusZone = if (recommendation.toZoneId == "gangnam") gangnam else samseong
+
+            WhatIfScenario(
+                id = "W-${index + 1}",
+                title = "${focusZone.name} 대응 시뮬레이션 ${index + 1}",
+                basedOnRecommendationId = recommendation.id,
+                summary = recommendation.reason,
+                vehicleShift = "${recommendation.fromZoneId} -> ${recommendation.toZoneId} ${recommendation.suggestedVehicleCount}대 이동",
+                baselineWaitMinutes = summary.averageWaitMinutes,
+                projectedWaitMinutes = max(3.2, summary.averageWaitMinutes - waitReduction),
+                baselineDispatchSuccessRate = summary.dispatchSuccessRate,
+                projectedDispatchSuccessRate = minOf(97.5, summary.dispatchSuccessRate + dispatchGain),
+                riskLevel = recommendation.priority,
+                tradeOff = when (recommendation.priority) {
+                    AlertLevel.CRITICAL -> "원본 권역 공급 여유가 빠르게 줄 수 있어 후속 회차 관리가 필요합니다."
+                    AlertLevel.WARNING -> "예상 효과는 안정적이지만, 반대 권역 호출 증가 시 추가 재배치가 필요할 수 있습니다."
+                    AlertLevel.INFO -> "선제 대응 성격이 강해 즉각 체감 효과는 작지만 피크 분산에 유리합니다."
+                }
+            )
+        }
+    }
+
     private fun currentScenario(): SimulationScenario {
         return when (tick % 4) {
             0 -> SimulationScenario(
@@ -407,4 +475,6 @@ class DashboardSimulationService {
         val currentTime: String,
         val peakFactor: Int
     )
+
+    private fun Double.toFixed(scale: Int): String = "%.${scale}f".format(this)
 }

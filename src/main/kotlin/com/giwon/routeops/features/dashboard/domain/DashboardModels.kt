@@ -120,6 +120,29 @@ data class OperationsReport(
     val operatorActions: List<String>
 )
 
+data class AiBriefing(
+    val headline: String,
+    val overview: String,
+    val recommendedAction: String,
+    val rationale: List<String>,
+    val expectedImpact: String,
+    val confidence: Int
+)
+
+data class WhatIfScenario(
+    val id: String,
+    val title: String,
+    val basedOnRecommendationId: String,
+    val summary: String,
+    val vehicleShift: String,
+    val baselineWaitMinutes: Double,
+    val projectedWaitMinutes: Double,
+    val baselineDispatchSuccessRate: Double,
+    val projectedDispatchSuccessRate: Double,
+    val riskLevel: AlertLevel,
+    val tradeOff: String
+)
+
 data class DashboardSnapshot(
     val scenario: ScenarioStatus,
     val summary: DashboardSummary,
@@ -132,7 +155,9 @@ data class DashboardSnapshot(
     val forecasts: List<DemandForecast>,
     val vehicleHistories: List<VehicleHistory>,
     val zoneTimelines: List<ZoneTimeline>,
-    val report: OperationsReport
+    val report: OperationsReport,
+    val aiBriefing: AiBriefing,
+    val whatIfScenarios: List<WhatIfScenario>
 )
 
 data class GeoPoint(

@@ -21,5 +21,7 @@ class DashboardControllerTest(
             .andExpect(jsonPath("$.success").value(true))
             .andExpect(jsonPath("$.data.summary.activeDemands").exists())
             .andExpect(jsonPath("$.data.zones[0].name").exists())
+            .andExpect(jsonPath("$.data.aiBriefing.headline").exists())
+            .andExpect(jsonPath("$.data.whatIfScenarios[0].title").exists())
     }
 }

@@ -39,6 +39,12 @@ class DashboardController(
     @GetMapping("/forecasts")
     fun getForecasts() = ApiResponse(data = dashboardSimulationService.getSnapshot().forecasts)
 
+    @GetMapping("/copilot/briefing")
+    fun getAiBriefing() = ApiResponse(data = dashboardSimulationService.getSnapshot().aiBriefing)
+
+    @GetMapping("/what-if")
+    fun getWhatIfScenarios() = ApiResponse(data = dashboardSimulationService.getSnapshot().whatIfScenarios)
+
     @PostMapping("/simulation/tick")
     fun advanceSimulation(): ApiResponse<Map<String, String>> {
         dashboardSimulationService.advance()
