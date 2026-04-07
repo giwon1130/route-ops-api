@@ -1,33 +1,55 @@
 # RouteOps API
 
-호출형 이동 서비스 운영자를 위한 운영 콘솔 API다. 초기 버전은 실운영 데이터 대신 시뮬레이션 데이터를 사용해 권역 수요, 차량 상태, 배차 지연, 운영 추천 흐름을 검증하는 MVP다.
+`RouteOps API`는 호출형 이동 서비스 운영 콘솔을 위한 백엔드다.  
+실운영 데이터가 아직 없더라도 운영 화면과 의사결정 흐름을 검증할 수 있도록, 시나리오 기반 시뮬레이션 데이터를 제공한다.
 
-## MVP 제공 기능
-- 대시보드 요약 KPI 조회
-- 권역, 차량, 호출, 알림, 시계열 지표 조회
-- 권역 재배치 추천 조회
-- 30분 수요 예측 조회
-- 시간대 운영 시나리오 상태 포함
-- 추천별 규칙 근거(rule basis) 포함
-- 차량 이동 이력 데이터 포함
-- 권역 타임라인 데이터 포함
-- 운영 리포트 요약 포함
-- 운영 시뮬레이션 `tick` / `reset`
+## Purpose
 
-## 실행
-```bash
-./gradlew bootRun
-```
+이 API는 단순 CRUD 서버가 아니다.  
+운영 콘솔이 필요한 데이터를 한 번에 제공하는 `운영 시뮬레이션 + 대시보드 API` 역할을 한다.
 
-기본 포트는 `8087`이다.
+핵심 목적은 다음과 같다.
 
-## Docker 실행
-```bash
-docker build -t route-ops-api .
-docker run -p 8087:8087 route-ops-api
-```
+- 권역 수요와 차량 상태를 운영자 관점으로 표현
+- 현재 운영 지표와 위험 신호를 요약
+- 재배치 추천과 근거를 제공
+- 30분 단기 수요 예측을 제공
+- 시간 흐름에 따라 운영 시나리오를 바꿔보며 화면을 검증
 
-## 주요 엔드포인트
+## Stack
+
+- Kotlin 1.9
+- Spring Boot 3
+- Gradle
+- JUnit 5
+
+## What It Returns
+
+### 대시보드 데이터
+- KPI summary
+- zones
+- vehicles
+- demands
+- alerts
+- metric timeseries
+
+### 운영 지원 데이터
+- rebalancing recommendations
+- demand forecasts
+- scenario status
+- recommendation rule basis
+
+### 상세 분석 데이터
+- vehicle histories
+- zone timelines
+- operations report
+
+### 시뮬레이션 제어
+- tick
+- reset
+
+## Main Endpoints
+
 - `GET /api/v1/dashboard/snapshot`
 - `GET /api/v1/dashboard/summary`
 - `GET /api/v1/zones`
@@ -39,3 +61,80 @@ docker run -p 8087:8087 route-ops-api
 - `GET /api/v1/forecasts`
 - `POST /api/v1/simulation/tick`
 - `POST /api/v1/simulation/reset`
+
+## Snapshot Response Includes
+
+`/api/v1/dashboard/snapshot` 하나로 프론트가 운영 콘솔을 렌더링할 수 있게 구성했다.
+
+- `summary`
+- `zones`
+- `vehicles`
+- `demands`
+- `alerts`
+- `metrics`
+- `recommendations`
+- `forecasts`
+- `scenario`
+- `vehicleHistories`
+- `zoneTimelines`
+- `report`
+
+## Run Local
+
+```bash
+./gradlew bootRun
+```
+
+- default port: `8087`
+
+## Test
+
+```bash
+./gradlew test
+```
+
+## Docker
+
+```bash
+docker build -t route-ops-api .
+docker run -p 8087:8087 route-ops-api
+```
+
+## Project Structure
+
+```text
+src/main/kotlin/com/giwon/routeops
+├── bootstrap/
+├── common/
+└── features/dashboard/
+    ├── application/
+    ├── domain/
+    └── presentation/
+```
+
+## Domain Overview
+
+- `Zone`: 운영 권역
+- `Vehicle`: 차량 상태와 위치
+- `Demand`: 호출 요청
+- `OperationAlert`: 운영 경고
+- `RebalancingRecommendation`: 차량 재배치 추천
+- `DemandForecast`: 단기 수요 예측
+- `VehicleHistory`: 차량 최근 이동 이력
+- `ZoneTimeline`: 권역 변화 흐름
+- `OperationsReport`: 운영 요약 리포트
+
+## Current Limitations
+
+- 실제 차량 GPS 데이터는 아님
+- 실제 배차 엔진 연동 없음
+- 예측은 머신러닝 모델이 아니라 시나리오 기반 계산
+- 추천은 규칙 기반 로직 중심
+
+## Next Extensions
+
+- PostgreSQL/PostGIS 연결
+- Redis/SSE 실시간 갱신
+- 규칙 기반 추천 고도화
+- What-if 시뮬레이션 API
+- AI 운영 브리핑 API
