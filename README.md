@@ -100,6 +100,17 @@ docker build -t route-ops-api .
 docker run -p 8087:8087 route-ops-api
 ```
 
+통합 실행이 필요하면 상위 묶음 디렉토리의 compose도 사용할 수 있다.
+
+```bash
+cd /Users/g/workspace/public/mobility/route-ops
+docker compose up --build
+```
+
+- compose 기준 web: `http://localhost:4174`
+- compose 기준 API health: `http://localhost:8087/actuator/health`
+- 컨테이너 이미지에는 healthcheck용 `wget`을 포함했다.
+
 ## Project Structure
 
 ```text
